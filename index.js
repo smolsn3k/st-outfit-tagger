@@ -7,7 +7,7 @@ const DEFAULTS = {
     profileId: '',
     opacity: 0.9,
     categories: ['Outfit', 'Accessories', 'Uniform', 'Footwear', 'Headwear', 'Legwear'],
-    prompt: 'Look at the picture and describe ONLY the clothing and worn items of the main character as short lowercase NovelAI/Danbooru-style tags (2-5 words each, include colors, materials, patterns). Sort them into these groups: {{categories}}. Omit empty groups. Do not describe the person, pose or background. Reply with JSON only: {"GroupName": ["tag", "tag"]}',
+    prompt: 'Look at the picture and describe ONLY the clothing and worn items of the main character as short lowercase NovelAI/Danbooru-style tags (2-5 words each, include colors, materials, patterns). Sort them into these groups: {{categories}}. Omit empty groups. Do not describe the person, pose or background. Reply with ONE JSON object only: keys are the group names, values are arrays of tag strings. No placeholders, no examples, no extra text.',
     library: [],
 };
 const state = { img: '', groups: {} };
@@ -48,7 +48,7 @@ function renderGroups() {
 
 function parseTags(txt) {
     txt = txt.replace(/```(?:json)?/gi, '');
-    const g = {}, add = (k, arr) => { if (Array.isArray(arr)) (g[k] ||= []).push(...arr.map(x => String(x).trim()).filter(Boolean)); };
+    const g = {}, add = (k, arr) => { if (Array.isArray(arr)) (g[k] ||= []).push(...arr.map(x => String(x).trim()).filter(x => x && !/^(tag|example|placeholder)\s*\d*$/i.test(x))); };
     for (let i = 0; i < txt.length; i++) {
         if (txt[i] !== '{') continue;
         let d = 0, str = false;
@@ -64,7 +64,7 @@ function parseTags(txt) {
         }
     }
     if (!Object.keys(g).length) for (const m of txt.matchAll(/([A-Za-z][\w ]*?)\s*\(([^)]*)\)/g)) add(m[1].trim(), [...m[2].matchAll(/"([^"]+)"/g)].map(x => x[1]));
-    for (const k in g) g[k] = [...new Set(g[k])];
+    for (const k in g) { g[k] = [...new Set(g[k])]; if (!g[k].length) delete g[k]; }
     return g;
 }
 
@@ -193,6 +193,7 @@ function openModal() {
 
 jQuery(() => {
     extension_settings[KEY] = Object.assign(structuredClone(DEFAULTS), extension_settings[KEY] || {});
+    if (S().prompt.includes('"GroupName": ["tag", "tag"]')) { S().prompt = DEFAULTS.prompt; saveSettingsDebounced(); }
     $('#extensionsMenu').append('<div id="ot_wand" class="list-group-item flex-container flexGap5"><div class="fa-solid fa-shirt extensionsMenuExtensionButton"></div><span>Outfit Tagger</span></div>');
     $('#ot_wand').on('click', openModal);
 });
