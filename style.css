@@ -1,8 +1,9 @@
-#ot_overlay{position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center}
-#ot_panel{background:var(--SmartThemeBlurTintColor,#222);color:var(--SmartThemeBodyColor,#ddd);border:1px solid var(--SmartThemeBorderColor,#555);border-radius:10px;width:min(720px,96vw);max-height:94dvh;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+#ot_overlay{--ot-a:.9;position:fixed;top:0;left:0;width:100vw;width:100%;height:100vh;height:var(--ot-vh,100dvh);z-index:99999;background:rgba(0,0,0,calc(var(--ot-a)*.6));display:flex;align-items:center;justify-content:center;box-sizing:border-box;margin:0;padding:0;transform:none}
+#ot_panel{background:color-mix(in srgb,var(--SmartThemeBlurTintColor,#222) calc(var(--ot-a)*100%),transparent);color:var(--SmartThemeBodyColor,#ddd);border:1px solid var(--SmartThemeBorderColor,#555);border-radius:10px;width:min(720px,96%);max-height:94%;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;box-sizing:border-box;-webkit-overflow-scrolling:touch}
 .ot-head,.ot-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:space-between}
 .ot-row{justify-content:flex-start}
 #ot_panel .menu_button{min-height:40px;display:inline-flex;align-items:center;gap:6px;margin:0}
+#ot_op{flex:1;min-width:120px}
 #ot_prev{max-height:220px;max-width:100%;object-fit:contain;border-radius:8px;align-self:center}
 .ot-group{border:1px solid var(--SmartThemeBorderColor,#555);border-radius:8px;padding:8px;margin-bottom:6px}
 .ot-chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
@@ -11,4 +12,4 @@
 .ot-item img{width:56px;height:56px;object-fit:cover;border-radius:6px}
 .ot-item .grow{flex:1;min-width:0}
 #ot_panel textarea{width:100%;box-sizing:border-box}
-@media(max-width:600px){#ot_panel{width:100vw;max-height:100dvh;height:100dvh;border-radius:0}}
+@media(max-width:900px),(pointer:coarse){#ot_panel{width:100%;height:100%;max-height:100%;border-radius:0;border:none;padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom))}}

@@ -5,6 +5,7 @@ import { loadWorldInfo, saveWorldInfo, createWorldInfoEntry, world_names } from 
 const KEY = 'outfit_tagger';
 const DEFAULTS = {
     profileId: '',
+    opacity: 0.9,
     categories: ['Outfit', 'Accessories', 'Uniform', 'Footwear', 'Headwear', 'Legwear'],
     prompt: 'Look at the picture and describe ONLY the clothing and worn items of the main character as short lowercase NovelAI/Danbooru-style tags (2-5 words each, include colors, materials, patterns). Sort them into these groups: {{categories}}. Omit empty groups. Do not describe the person, pose or background. Reply with JSON only: {"GroupName": ["tag", "tag"]}',
     library: [],
@@ -103,6 +104,7 @@ function openModal() {
     $('#ot_overlay').remove();
     const root = $(`<div id="ot_overlay"><div id="ot_panel">
         <div class="ot-head"><b>Outfit Tagger</b><span id="ot_close" class="menu_button fa-solid fa-xmark"></span></div>
+        <div class="ot-row"><i class="fa-solid fa-circle-half-stroke"></i><input id="ot_op" type="range" min="0.1" max="1" step="0.05"><small id="ot_opv"></small></div>
         <select id="ot_prof" class="text_pole"><option value="">Choose connection profile (vision model)</option>${profs.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select>
         <div class="ot-row">
             <label class="menu_button"><i class="fa-solid fa-image"></i> Picture<input id="ot_file" type="file" accept="image/*" hidden></label>
@@ -124,11 +126,16 @@ function openModal() {
             <span id="ot_reset" class="menu_button">Reset defaults</span></details>
     </div></div>`).appendTo('body');
 
+    const fit = () => root.css('--ot-vh', window.innerHeight + 'px');
+    const applyOp = () => { root.css('--ot-a', S().opacity); $('#ot_opv').text(Math.round(S().opacity * 100) + '%'); };
+    fit(); applyOp();
+    $(window).off('resize.ot').on('resize.ot', fit);
+    $('#ot_op').val(S().opacity).on('input', e => { S().opacity = +e.target.value; applyOp(); saveSettingsDebounced(); });
     $('#ot_prof').val(S().profileId).on('change', e => { S().profileId = e.target.value; saveSettingsDebounced(); });
     $('#ot_cats').val(S().categories.join(', ')).on('change', e => { S().categories = e.target.value.split(',').map(s => s.trim()).filter(Boolean); saveSettingsDebounced(); renderGroups(); });
     $('#ot_prompt').val(S().prompt).on('change', e => { S().prompt = e.target.value; saveSettingsDebounced(); });
     $('#ot_reset').on('click', () => { Object.assign(S(), structuredClone({ ...DEFAULTS, library: S().library, profileId: S().profileId })); saveSettingsDebounced(); openModal(); });
-    $('#ot_close').on('click', () => root.remove());
+    $('#ot_close').on('click', () => { $(window).off('resize.ot'); root.remove(); });
     $('#ot_file').on('change', async e => { if (e.target.files[0]) await setImage(await readFile(e.target.files[0])); });
     root.on('paste', async e => { const f = [...(e.originalEvent.clipboardData?.files || [])].find(f => f.type.startsWith('image/')); if (f) await setImage(await readFile(f)); });
     $('#ot_avatar').on('click', async () => {
