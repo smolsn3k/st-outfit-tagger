@@ -46,6 +46,28 @@ function renderGroups() {
         <div class="ot-row"><input class="text_pole ot-add" placeholder="+ add tag, Enter" style="flex:1"><span class="menu_button ot-copyg">Copy</span></div></div>`).join(''));
 }
 
+function parseTags(txt) {
+    txt = txt.replace(/```(?:json)?/gi, '');
+    const g = {}, add = (k, arr) => { if (Array.isArray(arr)) (g[k] ||= []).push(...arr.map(x => String(x).trim()).filter(Boolean)); };
+    for (let i = 0; i < txt.length; i++) {
+        if (txt[i] !== '{') continue;
+        let d = 0, str = false;
+        for (let j = i; j < txt.length; j++) {
+            const c = txt[j];
+            if (str) { if (c === '\\') j++; else if (c === '"') str = false; }
+            else if (c === '"') str = true;
+            else if (c === '{') d++;
+            else if (c === '}' && --d === 0) {
+                try { for (const [k, v] of Object.entries(JSON.parse(txt.slice(i, j + 1)))) add(k, v); } catch { /* skip bad block */ }
+                i = j; break;
+            }
+        }
+    }
+    if (!Object.keys(g).length) for (const m of txt.matchAll(/([A-Za-z][\w ]*?)\s*\(([^)]*)\)/g)) add(m[1].trim(), [...m[2].matchAll(/"([^"]+)"/g)].map(x => x[1]));
+    for (const k in g) g[k] = [...new Set(g[k])];
+    return g;
+}
+
 async function generate() {
     const ctx = getContext();
     if (!state.img) return toastr.warning('Add a picture first');
@@ -56,9 +78,8 @@ async function generate() {
         const out = await ctx.ConnectionManagerRequestService.sendRequest(S().profileId,
             [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: state.img } }] }],
             1500, { stream: false, extractData: true, includePreset: true, includeInstruct: false });
-        const j = JSON.parse((out.content || '').match(/\{[\s\S]*\}/)[0]);
-        state.groups = {};
-        for (const [k, v] of Object.entries(j)) if (Array.isArray(v)) state.groups[k] = v.map(String);
+        state.groups = parseTags(out.content || '');
+        if (!Object.keys(state.groups).length) { console.log('[Outfit Tagger] raw reply:', out.content); toastr.warning('No tags found in the reply (see console)'); }
         renderGroups();
     } catch (e) { console.error(e); toastr.error('Failed: ' + (e.message || e)); }
     $('#ot_go').text('Describe').css('pointer-events', '');
