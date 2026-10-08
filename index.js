@@ -8,12 +8,17 @@ const DEFAULTS = {
     opacity: 0.9,
     categories: ['Outfit', 'Accessories', 'Uniform', 'Footwear', 'Headwear', 'Legwear'],
     prompt: 'Look at the picture and describe ONLY the clothing and worn items of the main character as short lowercase NovelAI/Danbooru-style tags (2-5 words each, include colors, materials, patterns). Sort them into these groups: {{categories}}. Omit empty groups. Do not describe the person, pose or background. Reply with ONE JSON object only: keys are the group names, values are arrays of tag strings. No placeholders, no examples, no extra text.',
+    mode: 'cats',
+    wholeName: 'Outfit',
+    promptWhole: 'Look at the picture and describe ONLY the clothing and worn items of the main character as short lowercase NovelAI/Danbooru-style tags (2-5 words each, include colors, materials, patterns). Do not describe the person, pose or background. Reply with ONE JSON object only, with a single key "outfit" whose value is an array of tag strings. No placeholders, no examples, no extra text.',
     library: [],
 };
 const state = { img: '', groups: {} };
 const S = () => extension_settings[KEY];
 const esc = s => $('<div>').text(s).html();
-const keys = () => [...new Set([...S().categories, ...Object.keys(state.groups)])];
+const whole = () => S().mode === 'whole';
+const keys = () => whole() ? [S().wholeName] : [...new Set([...S().categories, ...Object.keys(state.groups)])];
+const flat = g => { const all = [...new Set(Object.values(g).flat())]; return all.length ? { [S().wholeName]: all } : {}; };
 const fmt = g => Object.entries(g).filter(([, v]) => v.length).map(([k, v]) => `${k}(${v.map(t => `"${t}"`).join(', ')})`).join('\n\n');
 
 const readFile = f => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(f); });
@@ -41,7 +46,7 @@ async function setImage(src) {
 
 function renderGroups() {
     const ks = keys();
-    $('#ot_groups').html(ks.map((k, gi) => `<div class="ot-group" data-g="${gi}"><b>${esc(k)}</b>
+    $('#ot_groups').html(ks.map((k, gi) => `<div class="ot-group" data-g="${gi}">${whole() ? `<input class="text_pole ot-rename" value="${esc(k)}" title="Rename this line">` : `<b>${esc(k)}</b>`}
         <div class="ot-chips">${(state.groups[k] || []).map((t, i) => `<span class="ot-chip" data-i="${i}">${esc(t)} <i class="fa-solid fa-xmark"></i></span>`).join('')}</div>
         <div class="ot-row"><input class="text_pole ot-add" placeholder="+ add tag, Enter" style="flex:1"><span class="menu_button ot-copyg">Copy</span></div></div>`).join(''));
 }
@@ -72,13 +77,14 @@ async function generate() {
     const ctx = getContext();
     if (!state.img) return toastr.warning('Add a picture first');
     if (!S().profileId) return toastr.warning('Choose a profile');
-    const prompt = S().prompt.replace('{{categories}}', S().categories.join(', '));
+    const prompt = whole() ? S().promptWhole : S().prompt.replace('{{categories}}', S().categories.join(', '));
     $('#ot_go').text('Working...').css('pointer-events', 'none');
     try {
         const out = await ctx.ConnectionManagerRequestService.sendRequest(S().profileId,
             [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: state.img } }] }],
             1500, { stream: false, extractData: true, includePreset: true, includeInstruct: false });
         state.groups = parseTags(out.content || '');
+        if (whole()) state.groups = flat(state.groups);
         if (!Object.keys(state.groups).length) { console.log('[Outfit Tagger] raw reply:', out.content); toastr.warning('No tags found in the reply (see console)'); }
         renderGroups();
     } catch (e) { console.error(e); toastr.error('Failed: ' + (e.message || e)); }
@@ -126,6 +132,7 @@ function openModal() {
     const root = $(`<div id="ot_overlay"><div id="ot_panel">
         <div class="ot-head"><b>Outfit Tagger</b><span id="ot_close" class="menu_button fa-solid fa-xmark"></span></div>
         <div class="ot-row"><i class="fa-solid fa-circle-half-stroke"></i><input id="ot_op" type="range" min="0.1" max="1" step="0.05"><small id="ot_opv"></small></div>
+        <div class="ot-row ot-tabs"><span id="ot_tab_cats" class="menu_button ot-tab">Categories</span><span id="ot_tab_whole" class="menu_button ot-tab">Whole outfit</span></div>
         <select id="ot_prof" class="text_pole"><option value="">Choose connection profile (vision model)</option>${profs.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select>
         <div class="ot-row">
             <label class="menu_button"><i class="fa-solid fa-image"></i> Picture<input id="ot_file" type="file" accept="image/*" hidden></label>
@@ -142,8 +149,8 @@ function openModal() {
         <span id="ot_save" class="menu_button"><i class="fa-solid fa-floppy-disk"></i> Save outfit + picture</span>
         <details><summary>Library</summary><input id="ot_search" class="text_pole" placeholder="Search name / tags / items"><div id="ot_lib"></div></details>
         <details><summary>Settings</summary>
-            <small>Categories (comma separated)</small><input id="ot_cats" class="text_pole">
-            <small>Prompt ({{categories}} is replaced)</small><textarea id="ot_prompt" class="text_pole" rows="6"></textarea>
+            <div id="ot_cats_wrap"><small>Categories (comma separated)</small><input id="ot_cats" class="text_pole"></div>
+            <small id="ot_prompt_label"></small><textarea id="ot_prompt" class="text_pole" rows="6"></textarea>
             <span id="ot_reset" class="menu_button">Reset defaults</span></details>
     </div></div>`).appendTo('body');
 
@@ -154,8 +161,22 @@ function openModal() {
     $('#ot_op').val(S().opacity).on('input', e => { S().opacity = +e.target.value; applyOp(); saveSettingsDebounced(); });
     $('#ot_prof').val(S().profileId).on('change', e => { S().profileId = e.target.value; saveSettingsDebounced(); });
     $('#ot_cats').val(S().categories.join(', ')).on('change', e => { S().categories = e.target.value.split(',').map(s => s.trim()).filter(Boolean); saveSettingsDebounced(); renderGroups(); });
-    $('#ot_prompt').val(S().prompt).on('change', e => { S().prompt = e.target.value; saveSettingsDebounced(); });
-    $('#ot_reset').on('click', () => { Object.assign(S(), structuredClone({ ...DEFAULTS, library: S().library, profileId: S().profileId })); saveSettingsDebounced(); openModal(); });
+    const syncMode = () => {
+        $('#ot_tab_cats').toggleClass('ot-active', !whole()); $('#ot_tab_whole').toggleClass('ot-active', whole());
+        $('#ot_cats_wrap').toggle(!whole());
+        $('#ot_prompt_label').text(whole() ? 'Prompt (whole outfit)' : 'Prompt ({{categories}} is replaced)');
+        $('#ot_prompt').val(whole() ? S().promptWhole : S().prompt);
+    };
+    const setMode = m => {
+        S().mode = m;
+        if (whole()) state.groups = flat(state.groups);
+        saveSettingsDebounced(); syncMode(); renderGroups();
+    };
+    $('#ot_tab_cats').on('click', () => setMode('cats'));
+    $('#ot_tab_whole').on('click', () => setMode('whole'));
+    $('#ot_prompt').on('change', e => { S()[whole() ? 'promptWhole' : 'prompt'] = e.target.value; saveSettingsDebounced(); });
+    syncMode();
+    $('#ot_reset').on('click', () => { Object.assign(S(), structuredClone({ ...DEFAULTS, library: S().library, profileId: S().profileId, mode: S().mode, wholeName: S().wholeName })); saveSettingsDebounced(); openModal(); });
     $('#ot_close').on('click', () => { $(window).off('resize.ot'); root.remove(); });
     $('#ot_file').on('change', async e => { if (e.target.files[0]) await setImage(await readFile(e.target.files[0])); });
     root.on('paste', async e => { const f = [...(e.originalEvent.clipboardData?.files || [])].find(f => f.type.startsWith('image/')); if (f) await setImage(await readFile(f)); });
@@ -172,6 +193,10 @@ function openModal() {
     $('#ot_groups').on('click', '.ot-chip', function () {
         const k = keys()[$(this).closest('.ot-group').data('g')];
         state.groups[k].splice($(this).data('i'), 1); renderGroups();
+    }).on('change', '.ot-rename', function () {
+        const old = S().wholeName, nu = this.value.trim() || 'Outfit';
+        if (nu !== old) { if (state.groups[old]) { state.groups[nu] = state.groups[old]; delete state.groups[old]; } S().wholeName = nu; saveSettingsDebounced(); }
+        this.value = nu;
     }).on('keydown', '.ot-add', function (e) {
         if (e.key !== 'Enter' || !this.value.trim()) return;
         const k = keys()[$(this).closest('.ot-group').data('g')];
@@ -184,7 +209,7 @@ function openModal() {
         const id = $(this).closest('.ot-item').data('id'), o = S().library.find(x => x.id === id);
         if ($(this).hasClass('ot-cp')) return copy(fmt(o.groups));
         if ($(this).hasClass('ot-del')) { S().library = S().library.filter(x => x.id !== id); saveSettingsDebounced(); return renderLib(); }
-        state.groups = structuredClone(o.groups); state.img = o.thumb;
+        state.groups = structuredClone(o.groups); if (whole()) state.groups = flat(state.groups); state.img = o.thumb;
         $('#ot_prev').attr('src', o.thumb).toggle(!!o.thumb); $('#ot_name').val(o.name); $('#ot_tags').val(o.tags.join(', ')); renderGroups();
     });
     if (state.img) $('#ot_prev').attr('src', state.img).show();
