@@ -99,6 +99,7 @@ Outfit("white blouse", "black pleated skirt", "brown loafers")
 | Button | Action |
 | --- | --- |
 | Copy all / Copy | Copies everything, or one group |
+| Clear all / Clear | Clear all empties every group, the picture, and the name and library tag fields. Clear empties one group |
 | To char note | Appends the tags to the character's depth note |
 | To lorebook | Creates an entry in the chosen lorebook, keyed by the outfit name |
 | Save outfit + picture | Stores the outfit in the library |

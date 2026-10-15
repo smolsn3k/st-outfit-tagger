@@ -69,7 +69,7 @@ function renderGroups() {
     const ks = keys();
     $('#ot_groups').html(ks.map((k, gi) => `<div class="ot-group" data-g="${gi}">${single() ? `<input class="text_pole ot-rename" value="${esc(k)}" title="Rename this line">` : `<b>${esc(k)}</b>`}
         <div class="ot-chips">${(state.groups[k] || []).map((t, i) => `<span class="ot-chip" data-i="${i}">${esc(t)} <i class="fa-solid fa-xmark"></i></span>`).join('')}</div>
-        <div class="ot-row"><input class="text_pole ot-add" placeholder="+ add tag, Enter" style="flex:1"><span class="menu_button ot-copyg">Copy</span></div></div>`).join(''));
+        <div class="ot-row"><input class="text_pole ot-add" placeholder="+ add tag, Enter" style="flex:1"><span class="menu_button ot-copyg">Copy</span><span class="menu_button ot-clearg">Clear</span></div></div>`).join(''));
 }
 
 function parseTags(txt) {
@@ -174,7 +174,7 @@ function openModal() {
         <img id="ot_prev" hidden>
         <div id="ot_groups"></div>
         <div class="ot-row"><small>Output format</small><select id="ot_format" class="text_pole" style="flex:1">${Object.entries(FORMATS).map(([k, f]) => `<option value="${k}">${esc(f[0])}</option>`).join('')}</select></div>
-        <div class="ot-row"><span id="ot_copy" class="menu_button">Copy all</span><span id="ot_note" class="menu_button">To char note</span></div>
+        <div class="ot-row"><span id="ot_copy" class="menu_button">Copy all</span><span id="ot_clearall" class="menu_button">Clear all</span><span id="ot_note" class="menu_button">To char note</span></div>
         <div class="ot-row"><select id="ot_lore" class="text_pole" style="flex:1">${(world_names || []).map(n => `<option>${esc(n)}</option>`).join('')}</select><span id="ot_tolore" class="menu_button">To lorebook</span></div>
         <input id="ot_name" class="text_pole" placeholder="Outfit name">
         <input id="ot_tags" class="text_pole" placeholder="Library tags, comma separated">
@@ -226,6 +226,11 @@ function openModal() {
         try { await setImage(await readFile(await (await fetch('/characters/' + encodeURIComponent(c.avatar))).blob())); } catch { toastr.error('Could not load avatar'); }
     });
     $('#ot_go').on('click', generate);
+    $('#ot_clearall').on('click', () => {
+        state.groups = {}; state.img = '';
+        $('#ot_prev').attr('src', '').hide(); $('#ot_name').val(''); $('#ot_tags').val('');
+        renderGroups();
+    });
     $('#ot_copy').on('click', () => copy(fmt(state.groups)));
     $('#ot_note').on('click', toNote);
     $('#ot_tolore').on('click', toLore);
@@ -242,6 +247,9 @@ function openModal() {
         if (e.key !== 'Enter' || !this.value.trim()) return;
         const k = keys()[$(this).closest('.ot-group').data('g')];
         (state.groups[k] ||= []).push(this.value.trim()); renderGroups();
+    }).on('click', '.ot-clearg', function () {
+        const k = keys()[$(this).closest('.ot-group').data('g')];
+        delete state.groups[k]; renderGroups();
     }).on('click', '.ot-copyg', function () {
         const k = keys()[$(this).closest('.ot-group').data('g')];
         copy(fmt({ [k]: state.groups[k] || [] }));
