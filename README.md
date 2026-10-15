@@ -45,6 +45,22 @@ Describes the character's body and face instead of the clothes: age, build, heig
 Appearance("adult", "slim body", "long wavy black hair", "dark blue eyes", "165cm height")
 ```
 
+**Pose**
+Describes only the pose: posture, head tilt, arms, hands, legs, gaze, body orientation. One renamable line (default "Pose") with its own prompt.
+
+```
+Pose("standing", "hand on hip", "head tilt", "looking at viewer")
+```
+
+**Custom**
+Tick the aspects you want described. Each ticked aspect becomes its own group: Pose, Clothes, Appearance, Expression, Background, Vibe, Aesthetics, Lighting, Camera angle, Colors, Props. You can also type extra aspects (comma separated) in the field below the checkboxes. The model is told to describe only what is ticked.
+
+```
+Pose("sitting", "crossed legs")
+Lighting("soft light", "warm tones", "backlit")
+Background("classroom", "window", "bokeh")
+```
+
 ## Details field
 
 The text box under the buttons works in every mode. Write what you want added or watched for (for example `femboy, feminine face, 165cm, curtain bangs`) and it is sent to the model along with the prompt. Leave it empty to use the prompt alone. The text is remembered between sessions.

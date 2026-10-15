@@ -11,6 +11,11 @@ const DEFAULTS = {
     mode: 'cats',
     wholeName: 'Outfit',
     appearanceName: 'Appearance',
+    poseName: 'Pose',
+    promptPose: 'Look at the picture and describe ONLY the pose of the main character as short lowercase NovelAI/Danbooru-style tags (1-5 words each): body posture, head tilt, arm and hand positions, leg positions, gaze direction, body orientation. Do not describe clothing, appearance, background or style. Reply with ONE JSON object only, with a single key "pose" whose value is an array of tag strings. No placeholders, no examples, no extra text.',
+    customAspects: ['Pose', 'Clothes', 'Background'],
+    customExtra: '',
+    promptCustom: 'Look at the picture and describe it as short lowercase NovelAI/Danbooru-style tags (1-5 words each), grouped ONLY by these aspects: {{categories}}. Describe nothing outside these aspects. Reply with ONE JSON object only: keys are exactly these aspect names, values are arrays of tag strings. No placeholders, no examples, no extra text.',
     details: '',
     promptAppearance: 'Look at the picture and describe ONLY the physical appearance of the main character (not clothing, pose or background) as short lowercase NovelAI/Danbooru-style tags (1-4 words each). Cover apparent age, gender presentation, body type, height, skin, chest, shoulders, waist, hips, build, face shape and features, hair color/length/style/bangs, and eye color. Reply with ONE JSON object only, with a single key "appearance" whose value is an array of tag strings. No placeholders, no examples, no extra text.',
     promptWhole: 'Look at the picture and describe ONLY the clothing and worn items of the main character as short lowercase NovelAI/Danbooru-style tags (2-5 words each, include colors, materials, patterns). Do not describe the person, pose or background. Reply with ONE JSON object only, with a single key "outfit" whose value is an array of tag strings. No placeholders, no examples, no extra text.',
@@ -19,12 +24,14 @@ const DEFAULTS = {
 const state = { img: '', groups: {} };
 const S = () => extension_settings[KEY];
 const esc = s => $('<div>').text(s).html();
-const single = () => S().mode !== 'cats';
-const lineName = () => S().mode === 'appearance' ? S().appearanceName : S().wholeName;
-const lineKey = () => S().mode === 'appearance' ? 'appearanceName' : 'wholeName';
-const promptKey = () => ({ cats: 'prompt', whole: 'promptWhole', appearance: 'promptAppearance' })[S().mode];
-const DEFNAME = () => S().mode === 'appearance' ? 'Appearance' : 'Outfit';
-const keys = () => single() ? [lineName()] : [...new Set([...S().categories, ...Object.keys(state.groups)])];
+const ASPECTS = ['Pose', 'Clothes', 'Appearance', 'Expression', 'Background', 'Vibe', 'Aesthetics', 'Lighting', 'Camera angle', 'Colors', 'Props'];
+const single = () => ['whole', 'appearance', 'pose'].includes(S().mode);
+const catList = () => S().mode === 'custom' ? [...S().customAspects, ...S().customExtra.split(',').map(x => x.trim()).filter(Boolean)] : S().categories;
+const lineName = () => ({ appearance: S().appearanceName, pose: S().poseName })[S().mode] ?? S().wholeName;
+const lineKey = () => ({ appearance: 'appearanceName', pose: 'poseName' })[S().mode] ?? 'wholeName';
+const promptKey = () => ({ cats: 'prompt', whole: 'promptWhole', appearance: 'promptAppearance', pose: 'promptPose', custom: 'promptCustom' })[S().mode];
+const DEFNAME = () => ({ appearance: 'Appearance', pose: 'Pose' })[S().mode] ?? 'Outfit';
+const keys = () => single() ? [lineName()] : [...new Set([...catList(), ...Object.keys(state.groups)])];
 const flat = g => { const all = [...new Set(Object.values(g).flat())]; return all.length ? { [lineName()]: all } : {}; };
 const fmt = g => Object.entries(g).filter(([, v]) => v.length).map(([k, v]) => `${k}(${v.map(t => `"${t}"`).join(', ')})`).join('\n\n');
 
@@ -84,7 +91,8 @@ async function generate() {
     const ctx = getContext();
     if (!state.img) return toastr.warning('Add a picture first');
     if (!S().profileId) return toastr.warning('Choose a profile');
-    let prompt = single() ? S()[promptKey()] : S().prompt.replace('{{categories}}', S().categories.join(', '));
+    if (S().mode === 'custom' && !catList().length) return toastr.warning('Tick at least one aspect');
+    let prompt = single() ? S()[promptKey()] : S()[promptKey()].replace('{{categories}}', catList().join(', '));
     const det = ($('#ot_details').val() || '').trim();
     if (det) prompt += '\n\nExtra notes from the user (include these and pay special attention to them): ' + det;
     $('#ot_go').text('Working...').css('pointer-events', 'none');
@@ -141,7 +149,7 @@ function openModal() {
     const root = $(`<div id="ot_overlay"><div id="ot_panel">
         <div class="ot-head"><b>Outfit Tagger</b><span id="ot_close" class="menu_button fa-solid fa-xmark"></span></div>
         <div class="ot-row"><i class="fa-solid fa-circle-half-stroke"></i><input id="ot_op" type="range" min="0.1" max="1" step="0.05"><small id="ot_opv"></small></div>
-        <div class="ot-row ot-tabs"><span id="ot_tab_cats" class="menu_button ot-tab">Categories</span><span id="ot_tab_whole" class="menu_button ot-tab">Whole outfit</span><span id="ot_tab_appearance" class="menu_button ot-tab">Appearance</span></div>
+        <div class="ot-row ot-tabs"><span id="ot_tab_cats" class="menu_button ot-tab">Categories</span><span id="ot_tab_whole" class="menu_button ot-tab">Whole outfit</span><span id="ot_tab_appearance" class="menu_button ot-tab">Appearance</span><span id="ot_tab_pose" class="menu_button ot-tab">Pose</span><span id="ot_tab_custom" class="menu_button ot-tab">Custom</span></div>
         <select id="ot_prof" class="text_pole"><option value="">Choose connection profile (vision model)</option>${profs.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select>
         <div class="ot-row">
             <label class="menu_button"><i class="fa-solid fa-image"></i> Picture<input id="ot_file" type="file" accept="image/*" hidden></label>
@@ -159,6 +167,7 @@ function openModal() {
         <span id="ot_save" class="menu_button"><i class="fa-solid fa-floppy-disk"></i> Save outfit + picture</span>
         <details><summary>Library</summary><input id="ot_search" class="text_pole" placeholder="Search name / tags / items"><div id="ot_lib"></div></details>
         <details><summary>Settings</summary>
+            <div id="ot_custom_wrap"><small>Describe these aspects</small><div id="ot_aspects" class="ot-aspects"></div><input id="ot_extra" class="text_pole" placeholder="Extra aspects, comma separated (optional)"></div>
             <div id="ot_cats_wrap"><small>Categories (comma separated)</small><input id="ot_cats" class="text_pole"></div>
             <small id="ot_prompt_label"></small><textarea id="ot_prompt" class="text_pole" rows="6"></textarea>
             <span id="ot_reset" class="menu_button">Reset defaults</span></details>
@@ -172,9 +181,9 @@ function openModal() {
     $('#ot_prof').val(S().profileId).on('change', e => { S().profileId = e.target.value; saveSettingsDebounced(); });
     $('#ot_cats').val(S().categories.join(', ')).on('change', e => { S().categories = e.target.value.split(',').map(s => s.trim()).filter(Boolean); saveSettingsDebounced(); renderGroups(); });
     const syncMode = () => {
-        for (const m of ['cats', 'whole', 'appearance']) $('#ot_tab_' + m).toggleClass('ot-active', S().mode === m);
-        $('#ot_cats_wrap').toggle(!single());
-        $('#ot_prompt_label').text(S().mode === 'cats' ? 'Prompt ({{categories}} is replaced)' : S().mode === 'whole' ? 'Prompt (whole outfit)' : 'Prompt (appearance)');
+        for (const m of ['cats', 'whole', 'appearance', 'pose', 'custom']) $('#ot_tab_' + m).toggleClass('ot-active', S().mode === m);
+        $('#ot_cats_wrap').toggle(S().mode === 'cats'); $('#ot_custom_wrap').toggle(S().mode === 'custom');
+        $('#ot_prompt_label').text(({ cats: 'Prompt ({{categories}} is replaced)', whole: 'Prompt (whole outfit)', appearance: 'Prompt (appearance)', pose: 'Prompt (pose)', custom: 'Prompt ({{categories}} = ticked aspects)' })[S().mode]);
         $('#ot_prompt').val(S()[promptKey()]);
         $('#ot_details').attr('placeholder', S().mode === 'appearance' ? 'Details: what to add or pay attention to (e.g. femboy, long wavy black hair, 165cm)' : 'Details: what to add or pay attention to (optional)');
     };
@@ -186,10 +195,15 @@ function openModal() {
     $('#ot_tab_cats').on('click', () => setMode('cats'));
     $('#ot_tab_whole').on('click', () => setMode('whole'));
     $('#ot_tab_appearance').on('click', () => setMode('appearance'));
+    $('#ot_tab_pose').on('click', () => setMode('pose'));
+    $('#ot_tab_custom').on('click', () => setMode('custom'));
+    $('#ot_aspects').html(ASPECTS.map(a => `<label class="checkbox_label"><input type="checkbox" value="${a}" ${S().customAspects.includes(a) ? 'checked' : ''}><span>${a}</span></label>`).join(''))
+        .on('change', 'input', () => { S().customAspects = $('#ot_aspects input:checked').map((_, e) => e.value).get(); saveSettingsDebounced(); renderGroups(); });
+    $('#ot_extra').val(S().customExtra).on('change', e => { S().customExtra = e.target.value; saveSettingsDebounced(); renderGroups(); });
     $('#ot_details').val(S().details).on('change', e => { S().details = e.target.value; saveSettingsDebounced(); });
     $('#ot_prompt').on('change', e => { S()[promptKey()] = e.target.value; saveSettingsDebounced(); });
     syncMode();
-    $('#ot_reset').on('click', () => { Object.assign(S(), structuredClone({ ...DEFAULTS, library: S().library, profileId: S().profileId, mode: S().mode, wholeName: S().wholeName, appearanceName: S().appearanceName, details: S().details })); saveSettingsDebounced(); openModal(); });
+    $('#ot_reset').on('click', () => { Object.assign(S(), structuredClone({ ...DEFAULTS, library: S().library, profileId: S().profileId, mode: S().mode, wholeName: S().wholeName, appearanceName: S().appearanceName, poseName: S().poseName, customAspects: S().customAspects, customExtra: S().customExtra, details: S().details })); saveSettingsDebounced(); openModal(); });
     $('#ot_close').on('click', () => { $(window).off('resize.ot'); root.remove(); });
     $('#ot_file').on('change', async e => { if (e.target.files[0]) await setImage(await readFile(e.target.files[0])); });
     root.on('paste', async e => { const f = [...(e.originalEvent.clipboardData?.files || [])].find(f => f.type.startsWith('image/')); if (f) await setImage(await readFile(f)); });
