@@ -11,11 +11,12 @@ const DEFAULTS = {
     mode: 'cats',
     wholeName: 'Outfit',
     appearanceName: 'Appearance',
+    format: 'quotes',
     poseName: 'Pose',
     promptPose: 'Look at the picture and describe ONLY the pose of the main character as short lowercase NovelAI/Danbooru-style tags (1-5 words each): body posture, head tilt, arm and hand positions, leg positions, gaze direction, body orientation. Do not describe clothing, appearance, background or style. Reply with ONE JSON object only, with a single key "pose" whose value is an array of tag strings. No placeholders, no examples, no extra text.',
     customAspects: ['Pose', 'Clothes', 'Background'],
     customExtra: '',
-    promptCustom: 'Look at the picture and describe it as short lowercase NovelAI/Danbooru-style tags (1-5 words each), grouped ONLY by these aspects: {{categories}}. Describe nothing outside these aspects. Reply with ONE JSON object only: keys are exactly these aspect names, values are arrays of tag strings. No placeholders, no examples, no extra text.',
+    promptCustom: 'Look at the picture and describe it as short lowercase NovelAI/Danbooru-style tags (1-5 words each), grouped ONLY by these aspects: {{categories}}. Include every aspect that is visible. Describe nothing outside these aspects. Reply with ONE JSON object only: keys are exactly these aspect names, values are arrays of tag strings. No placeholders, no examples, no extra text.',
     details: '',
     promptAppearance: 'Look at the picture and describe ONLY the physical appearance of the main character (not clothing, pose or background) as short lowercase NovelAI/Danbooru-style tags (1-4 words each). Cover apparent age, gender presentation, body type, height, skin, chest, shoulders, waist, hips, build, face shape and features, hair color/length/style/bangs, and eye color. Reply with ONE JSON object only, with a single key "appearance" whose value is an array of tag strings. No placeholders, no examples, no extra text.',
     promptWhole: 'Look at the picture and describe ONLY the clothing and worn items of the main character as short lowercase NovelAI/Danbooru-style tags (2-5 words each, include colors, materials, patterns). Do not describe the person, pose or background. Reply with ONE JSON object only, with a single key "outfit" whose value is an array of tag strings. No placeholders, no examples, no extra text.',
@@ -33,7 +34,13 @@ const promptKey = () => ({ cats: 'prompt', whole: 'promptWhole', appearance: 'pr
 const DEFNAME = () => ({ appearance: 'Appearance', pose: 'Pose' })[S().mode] ?? 'Outfit';
 const keys = () => single() ? [lineName()] : [...new Set([...catList(), ...Object.keys(state.groups)])];
 const flat = g => { const all = [...new Set(Object.values(g).flat())]; return all.length ? { [lineName()]: all } : {}; };
-const fmt = g => Object.entries(g).filter(([, v]) => v.length).map(([k, v]) => `${k}(${v.map(t => `"${t}"`).join(', ')})`).join('\n\n');
+const FORMATS = {
+    quotes: ['name("tag", "tag")', (k, v) => `${k}(${v.map(t => `"${t}"`).join(', ')})`, '\n\n'],
+    parens: ['name(tag, tag)', (k, v) => `${k}(${v.join(', ')})`, '\n\n'],
+    colon: ['name: tag, tag', (k, v) => `${k}: ${v.join(', ')}`, '\n'],
+    tags: ['tag, tag (no names)', (k, v) => v.join(', '), ', '],
+};
+const fmt = g => { const [, f, sep] = FORMATS[S().format] || FORMATS.quotes; return Object.entries(g).filter(([, v]) => v.length).map(([k, v]) => f(k, v)).join(sep); };
 
 const readFile = f => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(f); });
 const resize = (src, max, q) => new Promise((res, rej) => {
@@ -101,6 +108,11 @@ async function generate() {
             [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: state.img } }] }],
             1500, { stream: false, extractData: true, includePreset: true, includeInstruct: false });
         state.groups = parseTags(out.content || '');
+        if (!single()) {
+            const norm = {};
+            for (const [k, v] of Object.entries(state.groups)) { const m = catList().find(c => c.toLowerCase() === k.toLowerCase()) || k; norm[m] = [...new Set([...(norm[m] || []), ...v])]; }
+            state.groups = norm;
+        }
         if (single()) state.groups = flat(state.groups);
         if (!Object.keys(state.groups).length) { console.log('[Outfit Tagger] raw reply:', out.content); toastr.warning('No tags found in the reply (see console)'); }
         renderGroups();
@@ -156,10 +168,12 @@ function openModal() {
             <span id="ot_avatar" class="menu_button"><i class="fa-solid fa-user"></i> Char avatar</span>
             <span id="ot_go" class="menu_button"><i class="fa-solid fa-wand-magic-sparkles"></i> Describe</span>
         </div>
+        <div id="ot_custom_wrap"><small>Describe these aspects</small><div id="ot_aspects" class="ot-aspects"></div><input id="ot_extra" class="text_pole" placeholder="Extra aspects, comma separated (optional)"></div>
         <textarea id="ot_details" class="text_pole" rows="2"></textarea>
         <small>Tip: you can also paste an image.</small>
         <img id="ot_prev" hidden>
         <div id="ot_groups"></div>
+        <div class="ot-row"><small>Output format</small><select id="ot_format" class="text_pole" style="flex:1">${Object.entries(FORMATS).map(([k, f]) => `<option value="${k}">${esc(f[0])}</option>`).join('')}</select></div>
         <div class="ot-row"><span id="ot_copy" class="menu_button">Copy all</span><span id="ot_note" class="menu_button">To char note</span></div>
         <div class="ot-row"><select id="ot_lore" class="text_pole" style="flex:1">${(world_names || []).map(n => `<option>${esc(n)}</option>`).join('')}</select><span id="ot_tolore" class="menu_button">To lorebook</span></div>
         <input id="ot_name" class="text_pole" placeholder="Outfit name">
@@ -167,7 +181,6 @@ function openModal() {
         <span id="ot_save" class="menu_button"><i class="fa-solid fa-floppy-disk"></i> Save outfit + picture</span>
         <details><summary>Library</summary><input id="ot_search" class="text_pole" placeholder="Search name / tags / items"><div id="ot_lib"></div></details>
         <details><summary>Settings</summary>
-            <div id="ot_custom_wrap"><small>Describe these aspects</small><div id="ot_aspects" class="ot-aspects"></div><input id="ot_extra" class="text_pole" placeholder="Extra aspects, comma separated (optional)"></div>
             <div id="ot_cats_wrap"><small>Categories (comma separated)</small><input id="ot_cats" class="text_pole"></div>
             <small id="ot_prompt_label"></small><textarea id="ot_prompt" class="text_pole" rows="6"></textarea>
             <span id="ot_reset" class="menu_button">Reset defaults</span></details>
@@ -195,6 +208,7 @@ function openModal() {
     $('#ot_tab_cats').on('click', () => setMode('cats'));
     $('#ot_tab_whole').on('click', () => setMode('whole'));
     $('#ot_tab_appearance').on('click', () => setMode('appearance'));
+    $('#ot_format').val(S().format).on('change', e => { S().format = e.target.value; saveSettingsDebounced(); });
     $('#ot_tab_pose').on('click', () => setMode('pose'));
     $('#ot_tab_custom').on('click', () => setMode('custom'));
     $('#ot_aspects').html(ASPECTS.map(a => `<label class="checkbox_label"><input type="checkbox" value="${a}" ${S().customAspects.includes(a) ? 'checked' : ''}><span>${a}</span></label>`).join(''))
@@ -203,7 +217,7 @@ function openModal() {
     $('#ot_details').val(S().details).on('change', e => { S().details = e.target.value; saveSettingsDebounced(); });
     $('#ot_prompt').on('change', e => { S()[promptKey()] = e.target.value; saveSettingsDebounced(); });
     syncMode();
-    $('#ot_reset').on('click', () => { Object.assign(S(), structuredClone({ ...DEFAULTS, library: S().library, profileId: S().profileId, mode: S().mode, wholeName: S().wholeName, appearanceName: S().appearanceName, poseName: S().poseName, customAspects: S().customAspects, customExtra: S().customExtra, details: S().details })); saveSettingsDebounced(); openModal(); });
+    $('#ot_reset').on('click', () => { Object.assign(S(), structuredClone({ ...DEFAULTS, library: S().library, profileId: S().profileId, mode: S().mode, wholeName: S().wholeName, appearanceName: S().appearanceName, poseName: S().poseName, format: S().format, customAspects: S().customAspects, customExtra: S().customExtra, details: S().details })); saveSettingsDebounced(); openModal(); });
     $('#ot_close').on('click', () => { $(window).off('resize.ot'); root.remove(); });
     $('#ot_file').on('change', async e => { if (e.target.files[0]) await setImage(await readFile(e.target.files[0])); });
     root.on('paste', async e => { const f = [...(e.originalEvent.clipboardData?.files || [])].find(f => f.type.startsWith('image/')); if (f) await setImage(await readFile(f)); });

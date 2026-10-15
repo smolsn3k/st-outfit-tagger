@@ -61,6 +61,19 @@ Lighting("soft light", "warm tones", "backlit")
 Background("classroom", "window", "bokeh")
 ```
 
+## Output format
+
+Pick it from the **Output format** dropdown above the Copy button:
+
+| Option | Result |
+| --- | --- |
+| `name("tag", "tag")` | `clothes("shoes", "coat")` |
+| `name(tag, tag)` | `clothes(shoes, coat)` |
+| `name: tag, tag` | `clothes: shoes, coat` |
+| `tag, tag (no names)` | `shoes, coat` |
+
+The format applies to Copy, To char note, To lorebook, and library search.
+
 ## Details field
 
 The text box under the buttons works in every mode. Write what you want added or watched for (for example `femboy, feminine face, 165cm, curtain bangs`) and it is sent to the model along with the prompt. Leave it empty to use the prompt alone. The text is remembered between sessions.
