@@ -17,3 +17,5 @@
 .ot-tab { flex: 1; text-align: center; opacity: .6; }
 .ot-tab.ot-active { opacity: 1; font-weight: bold; border-color: var(--SmartThemeQuoteColor, currentColor); }
 .ot-rename { font-weight: bold; margin-bottom: 4px; }
+.ot-tabs { flex-wrap: nowrap; }
+.ot-tab { padding-left: 4px; padding-right: 4px; font-size: .9em; }

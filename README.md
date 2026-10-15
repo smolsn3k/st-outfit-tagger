@@ -4,10 +4,10 @@ A SillyTavern extension that makes describing outfits for **NovelAI** easier. Gi
 
 ## What it does
 
-- Reads an image (upload, paste, or the character's avatar) and lists only the worn items: clothing, colors, materials, patterns. It ignores the person, pose, and background.
+- Reads an image (upload, paste, or the character's avatar) and lists either the worn items (clothing, colors, materials, patterns) or the character's physical appearance, depending on the mode.
 - Outputs lowercase tags of 2-5 words, ready to paste into a NovelAI prompt.
 - Lets you tidy the result: click a tag to remove it, type to add one.
-- Saves outfits to a searchable library with a thumbnail, name, and your own tags.
+- Saves results to a searchable library with a thumbnail, name, and your own tags.
 - Sends the result to the character note or a lorebook entry.
 
 ## Install
@@ -37,6 +37,17 @@ Tags are sorted into groups. The defaults are Outfit, Accessories, Uniform, Foot
 
 **Whole outfit**
 All tags go into one single line. The line's name is editable (default "Outfit") and is used when copying or sending.
+
+**Appearance**
+Describes the character's body and face instead of the clothes: age, build, height, skin, face, hair, eyes. Like Whole outfit it is one renamable line (default "Appearance") with its own prompt. Example output:
+
+```
+Appearance("adult", "slim body", "long wavy black hair", "dark blue eyes", "165cm height")
+```
+
+## Details field
+
+The text box under the buttons works in every mode. Write what you want added or watched for (for example `femboy, feminine face, 165cm, curtain bangs`) and it is sent to the model along with the prompt. Leave it empty to use the prompt alone. The text is remembered between sessions.
 
 ## Output format
 
